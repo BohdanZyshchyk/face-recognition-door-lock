@@ -103,4 +103,8 @@ if __name__ == "__main__":
     gui_app_object.attachFaceRecognizerObject(face_recognizer_object)
     gui_app_object.attachServoMotorObject(servo_motor_object)
 
-    gui_app_object.start() 
+    try:
+        gui_app_object.start()
+    finally:
+        # Clean up GPIO resources on exit
+        servo_motor_object.cleanup() 
