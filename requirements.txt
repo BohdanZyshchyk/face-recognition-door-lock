@@ -2,4 +2,6 @@ PyYAML
 imutils
 # PyQt5==5.9.2
 opencv-python
+face_recognition
+Pillow>=8.0.0
 https://dl.google.com/coral/python/tflite_runtime-1.14.0-cp37-cp37m-linux_armv7l.whl
