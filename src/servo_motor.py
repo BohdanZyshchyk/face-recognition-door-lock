@@ -1,38 +1,27 @@
-from gpiozero import Servo, LED
-from gpiozero.pins.pigpio import PiGPIOFactory
+from gpiozero import Servo, LED, Device
+from gpiozero.pins.lgpio import LGPIOFactory
 import time
 
 class ServoMotor:
     def __init__(self):
-        try:
-            # Try to use pigpio for better PWM control
-            factory = PiGPIOFactory()
-        except:
-            # Fallback to default pin factory
-            factory = None
-            
-        self.servo_pin = 17
-        self.status_pin = 3
-        
-        # Initialize servo with correction factor for more accurate positioning
-        if factory:
-            self.servo = Servo(self.servo_pin, pin_factory=factory)
-        else:
-            self.servo = Servo(self.servo_pin)
-            
+        # Примусово використовуємо LGPIOFactory (сумісна з Pi 5)
+        Device.pin_factory = LGPIOFactory()
+
+        self.servo_pin = 17  # BCM-пін
+        self.status_pin = 3  # BCM-пін для світлодіода
+
+        # Ініціалізація серво та світлодіода
+        self.servo = Servo(self.servo_pin)
         self.status_led = LED(self.status_pin)
-        
-        # Set initial position
+
+        # Початкове положення — мінімальне
         self.servo.min()
 
     def setAngle(self, angle):
-        # Convert angle (0-180) to servo value (-1 to 1)
-        # 0 degrees = -1, 90 degrees = 0, 180 degrees = 1
+        # Перетворення кута в діапазон від -1 до 1
         servo_value = (angle / 90.0) - 1
-        
-        # Clamp value between -1 and 1
         servo_value = max(-1, min(1, servo_value))
-        
+
         self.status_led.on()
         self.servo.value = servo_value
         time.sleep(1)
@@ -41,12 +30,11 @@ class ServoMotor:
     def lockDoor(self):
         self.setAngle(90)
         print("Door Locked")
-    
+
     def unlockDoor(self):
         self.setAngle(0)
         print("Door Unlocked")
-        
+
     def cleanup(self):
-        """Clean up GPIO resources"""
         self.servo.close()
         self.status_led.close()
