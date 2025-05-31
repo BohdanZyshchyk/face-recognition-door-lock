@@ -1,20 +1,40 @@
-import cv2
+import tkinter as tk
+from PIL import Image, ImageTk
+from picamera2 import Picamera2
 
-cap = cv2.VideoCapture(0)
+class CameraApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Pi Camera Live View")
+        self.root.geometry("800x600")
+        self.root.configure(bg="black")
 
-if not cap.isOpened():
-    print("❌ Failed to open camera")
-    exit()
+        self.picam2 = Picamera2()
+        self.picam2.preview_configuration.main.size = (640, 480)
+        self.picam2.preview_configuration.main.format = "RGB888"
+        self.picam2.configure("preview")
+        self.picam2.start()
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        print("❌ Failed to grab frame")
-        break
+        self.label = tk.Label(self.root)
+        self.label.pack()
 
-    cv2.imshow("Camera", frame)
-    if cv2.waitKey(1) == 27:  # ESC key to exit
-        break
+        self.update_frame()
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-cap.release()
-cv2.destroyAllWindows()
+    def update_frame(self):
+        frame = self.picam2.capture_array()
+        image = Image.fromarray(frame)
+        photo = ImageTk.PhotoImage(image=image)
+
+        self.label.configure(image=photo)
+        self.label.image = photo
+        self.root.after(30, self.update_frame)
+
+    def on_close(self):
+        self.picam2.stop()
+        self.root.destroy()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = CameraApp(root)
+    root.mainloop()
