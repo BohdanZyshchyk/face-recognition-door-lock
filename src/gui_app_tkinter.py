@@ -16,7 +16,10 @@ class VideoThread(threading.Thread):
         self.servo_motor_object = None
         
     def run(self):
-        cap = cv2.VideoCapture(0)
+        pipeline = ("libcamerasrc ! "
+        "video/x-raw,format=RGB,width=640,height=480,framerate=30/1 ! "
+        "videoconvert ! appsink")
+        cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
         while self.running:
             return_value, image_frame = cap.read()
             if return_value and self.face_recognizer_method:

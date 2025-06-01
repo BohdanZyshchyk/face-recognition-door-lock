@@ -1,47 +1,33 @@
-import tkinter as tk
-from PIL import Image, ImageTk
 import cv2
+import gi
+import sys
 
-class CameraApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("GStreamer Pi Camera Live View")
-        self.root.geometry("800x600")
-        self.root.configure(bg="black")
+gi.require_version('Gst', '1.0')
+from gi.repository import Gst
 
-        # Use GStreamer pipeline
-        pipeline = (
-            "libcamerasrc ! "
-            "video/x-raw,format=RGB,width=640,height=480,framerate=30/1 ! "
-            "videoconvert ! "
-            "appsink"
-        )
+Gst.init(sys.argv[1:])
+print("? GStreamer version:", Gst.version_string())
 
-        self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+pipeline = (
+    "libcamerasrc ! "
+    "video/x-raw,format=RGB,width=640,height=480,framerate=30/1 ! "
+    "videoconvert ! appsink"
+)
 
-        if not self.cap.isOpened():
-            raise RuntimeError("❌ Failed to open GStreamer pipeline.")
+cap = cv2.VideoCapture(pipeline)
+if not cap.isOpened():
+    print("? Failed to open pipeline")
+    sys.exit(1)
 
-        self.label = tk.Label(self.root)
-        self.label.pack()
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        print("? Failed to read frame")
+        break
 
-        self.update_frame()
-        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+    cv2.imshow("Camera", frame)
+    if cv2.waitKey(1) == 27:
+        break
 
-    def update_frame(self):
-        ret, frame = self.cap.read()
-        if ret:
-            image = Image.fromarray(frame)
-            photo = ImageTk.PhotoImage(image=image)
-            self.label.configure(image=photo)
-            self.label.image = photo
-        self.root.after(30, self.update_frame)
-
-    def on_close(self):
-        self.cap.release()
-        self.root.destroy()
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = CameraApp(root)
-    root.mainloop()
+cap.release()
+cv2.destroyAllWindows()
