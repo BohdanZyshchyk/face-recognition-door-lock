@@ -2,7 +2,6 @@ import face_recognition
 import cv2, os, sys
 import numpy as np
 from gui_app_tkinter import TkinterApplication
-from servo_motor import ServoMotor
 
 class FaceRecognizer:
     def __init__(self):
@@ -97,7 +96,16 @@ class FaceRecognizer:
 
 if __name__ == "__main__":
     face_recognizer_object = FaceRecognizer()
-    servo_motor_object = ServoMotor()
+    
+    # Try to import real servo motor, fall back to mock for testing
+    try:
+        from servo_motor import ServoMotor
+        servo_motor_object = ServoMotor()
+        print("Using real ServoMotor with GPIO")
+    except ImportError:
+        from servo_motor_mock import ServoMotor
+        servo_motor_object = ServoMotor()
+        print("Using mock ServoMotor (GPIO not available)")
 
     gui_app_object = TkinterApplication()
     gui_app_object.attachFaceRecognizerObject(face_recognizer_object)

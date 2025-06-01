@@ -14,29 +14,49 @@ class VideoThread(threading.Thread):
         self.running = True
         self.face_recognizer_method = None
         self.servo_motor_object = None
+        self.face_recognition_enabled = False  # Face recognition is disabled by default
         
     def run(self):
-        pipeline = ("libcamerasrc ! "
-        "video/x-raw,format=RGB,width=640,height=480,framerate=30/1 ! "
-        "videoconvert ! appsink")
-        cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+        # Try GStreamer pipeline first (for Raspberry Pi)
+        try:
+            pipeline = ("libcamerasrc ! "
+            "video/x-raw,format=RGB,width=640,height=480,framerate=30/1 ! "
+            "videoconvert ! appsink")
+            cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+            if not cap.isOpened():
+                raise Exception("GStreamer pipeline failed")
+        except:
+            # Fallback to default camera (for Windows/other platforms)
+            cap = cv2.VideoCapture(0)
+            if not cap.isOpened():
+                # Try other camera indices
+                for i in range(1, 4):
+                    cap = cv2.VideoCapture(i)
+                    if cap.isOpened():
+                        break
+        
         while self.running:
             return_value, image_frame = cap.read()
-            if return_value and self.face_recognizer_method:
-                # Run the face detector
-                image_frame, result = self.face_recognizer_method(image_frame)
+            if return_value:
+                # Only run face recognition if enabled and method is available
+                if self.face_recognition_enabled and self.face_recognizer_method:
+                    # Run the face detector
+                    image_frame, result = self.face_recognizer_method(image_frame)
+                    
+                    # Update the status based on the result
+                    self.app.update_status(result)
+                    
+                    # Execute the motor control action
+                    if self.servo_motor_object:
+                        if result == True:
+                            self.servo_motor_object.unlockDoor()
+                        else:
+                            self.servo_motor_object.lockDoor()
+                else:
+                    # When face recognition is disabled, show default status
+                    self.app.update_status(None)
                 
-                # Update the status based on the result
-                self.app.update_status(result)
-                
-                # Execute the motor control action
-                if self.servo_motor_object:
-                    if result == True:
-                        self.servo_motor_object.unlockDoor()
-                    else:
-                        self.servo_motor_object.lockDoor()
-                
-                # Convert image for Tkinter display
+                # Always convert and display the image
                 self.app.update_image(image_frame)
             
             time.sleep(0.03)  # ~30 FPS
@@ -50,6 +70,9 @@ class VideoThread(threading.Thread):
     
     def setServoMotorObject(self, servo_motor_object):
         self.servo_motor_object = servo_motor_object
+    
+    def enableFaceRecognition(self, enable):
+        self.face_recognition_enabled = enable
 
 class TkinterApplication:
     def __init__(self):
@@ -64,13 +87,71 @@ class TkinterApplication:
         self.main_frame = tk.Frame(self.root, bg='black')
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
+        # Create control buttons frame at the top
+        self.control_frame = tk.Frame(self.main_frame, bg='black')
+        self.control_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        # Create buttons
+        button_style = {'font': ('Arial', 12), 'width': 15, 'height': 2}
+        
+        self.start_button = tk.Button(
+            self.control_frame, 
+            text="Start Recognition", 
+            command=self.start_recognition,
+            bg='green',
+            fg='white',
+            **button_style
+        )
+        self.start_button.pack(side=tk.LEFT, padx=5)
+        
+        self.stop_button = tk.Button(
+            self.control_frame, 
+            text="Stop Recognition", 
+            command=self.stop_recognition,
+            bg='red',
+            fg='white',
+            state='disabled',
+            **button_style
+        )
+        self.stop_button.pack(side=tk.LEFT, padx=5)
+        
+        self.open_door_button = tk.Button(
+            self.control_frame, 
+            text="Open Door", 
+            command=self.open_door,
+            bg='blue',
+            fg='white',
+            **button_style
+        )
+        self.open_door_button.pack(side=tk.LEFT, padx=5)
+        
+        self.close_door_button = tk.Button(
+            self.control_frame, 
+            text="Close Door", 
+            command=self.close_door,
+            bg='orange',
+            fg='white',
+            **button_style
+        )
+        self.close_door_button.pack(side=tk.LEFT, padx=5)
+        
+        self.admin_button = tk.Button(
+            self.control_frame, 
+            text="Admin Panel", 
+            command=self.open_admin_panel,
+            bg='purple',
+            fg='white',
+            **button_style
+        )
+        self.admin_button.pack(side=tk.LEFT, padx=5)
+        
         # Video display label
         self.video_label = tk.Label(self.main_frame, bg='black')
         self.video_label.pack(pady=(0, 20))
         
         # Status text box (using Entry widget as read-only)
         self.status_var = tk.StringVar()
-        self.status_var.set("Nothing here")
+        self.status_var.set("Camera Ready - Face Recognition Disabled")
         self.status_entry = tk.Entry(
             self.main_frame, 
             textvariable=self.status_var,
@@ -83,6 +164,10 @@ class TkinterApplication:
         
         # Initialize video thread
         self.video_thread = VideoThread(self)
+        
+        # Store references
+        self.face_recognizer_object = None
+        self.servo_motor_object = None
         
         # Handle window closing
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -119,7 +204,10 @@ class TkinterApplication:
     
     def update_status(self, face_found):
         """Update status text based on face recognition result"""
-        if face_found:
+        if face_found is None:
+            # Face recognition is disabled
+            status_text = "Camera Ready - Face Recognition Disabled"
+        elif face_found:
             status_text = "Face ID Found, Unlocking Door!"
         else:
             status_text = "No face ID found"
@@ -130,6 +218,36 @@ class TkinterApplication:
     def _update_status_text(self, text):
         """Update the status text in the main thread"""
         self.status_var.set(text)
+    
+    def start_recognition(self):
+        """Start face recognition"""
+        self.video_thread.enableFaceRecognition(True)
+        self.start_button.config(state='disabled')
+        self.stop_button.config(state='normal')
+        self.status_var.set("Face Recognition Started")
+    
+    def stop_recognition(self):
+        """Stop face recognition"""
+        self.video_thread.enableFaceRecognition(False)
+        self.start_button.config(state='normal')
+        self.stop_button.config(state='disabled')
+        self.status_var.set("Face Recognition Stopped")
+    
+    def open_door(self):
+        """Manually open the door"""
+        if self.servo_motor_object:
+            self.servo_motor_object.unlockDoor()
+            self.status_var.set("Door Manually Opened")
+    
+    def close_door(self):
+        """Manually close the door"""
+        if self.servo_motor_object:
+            self.servo_motor_object.lockDoor()
+            self.status_var.set("Door Manually Closed")
+    
+    def open_admin_panel(self):
+        """Open admin panel (placeholder)"""
+        self.status_var.set("Admin Panel - Coming Soon")
     
     def attachFaceRecognizerObject(self, face_recognizer_object):
         """Attach the face recognizer object"""

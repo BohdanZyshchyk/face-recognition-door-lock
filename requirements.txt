@@ -1,9 +1,14 @@
-PyYAML
-imutils
-# PyQt5==5.9.2
-opencv-python
-face_recognition
+# Core dependencies
+opencv-python>=4.5.0
+face-recognition>=1.3.0
+numpy>=1.19.0
+
+# GUI dependencies
 Pillow>=8.0.0
-https://dl.google.com/coral/python/tflite_runtime-1.14.0-cp37-cp37m-linux_armv7l.whl
-gpiozero
-pigpio
+
+# Raspberry Pi specific (optional - only needed on Pi)
+# Uncomment these lines when installing on Raspberry Pi:
+# gpiozero>=1.6.0
+# lgpio>=0.2.0
+
+# Note: tkinter is included with Python standard library
